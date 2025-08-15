@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Widget, DashboardState } from '../types/dashboard';
 
 const initialWidgets: Widget[] = [
@@ -68,21 +68,35 @@ const initialWidgets: Widget[] = [
 ];
 
 export const useDashboard = () => {
-    const [dashboardState, setDashboardState] = useState<DashboardState>({
-        widgets: initialWidgets,
-        theme: 'light',
-        canvasSize: { width: 1400, height: 800 }
+    // Initialize state from local storage or fallback to initialWidgets
+    const [dashboardState, setDashboardState] = useState<DashboardState>(() => {
+        const savedState = localStorage.getItem('dashboardState');
+        if (savedState) {
+            try {
+                return JSON.parse(savedState) as DashboardState;
+            } catch (error) {
+                console.error('Failed to parse saved state:', error);
+            }
+        }
+        return {
+            widgets: initialWidgets,
+            theme: 'light',
+            canvasSize: { width: 1400, height: 800 }
+        };
     });
 
+    // Save entire dashboard state to local storage whenever it changes
+    useEffect(() => {
+        localStorage.setItem('dashboardState', JSON.stringify(dashboardState));
+    }, [dashboardState]);
+
     const moveWidget = useCallback((id: string, position: { x: number; y: number }) => {
-        setDashboardState((prev) => {
-            return {
-                ...prev,
-                widgets: prev.widgets.map((w) =>
-                    w.id === id ? { ...w, position } : w
-                )
-            };
-        });
+        setDashboardState((prev) => ({
+            ...prev,
+            widgets: prev.widgets.map((w) =>
+                w.id === id ? { ...w, position } : w
+            )
+        }));
     }, []);
 
     const resizeWidget = useCallback((id: string, size: { width: number; height: number }) => {
@@ -96,7 +110,7 @@ export const useDashboard = () => {
 
     const bringToFront = useCallback((id: string) => {
         setDashboardState((prev) => {
-            const maxZ = Math.max(...prev.widgets.map(w => w.zIndex || 0));
+            const maxZ = Math.max(...prev.widgets.map((w) => w.zIndex || 0));
             return {
                 ...prev,
                 widgets: prev.widgets.map((w) =>
@@ -107,7 +121,7 @@ export const useDashboard = () => {
     }, []);
 
     const addWidget = useCallback((widget: Omit<Widget, 'id'>) => {
-        const maxZ = Math.max(...dashboardState.widgets.map(w => w.zIndex || 0), 0);
+        const maxZ = Math.max(...dashboardState.widgets.map((w) => w.zIndex || 0), 0);
         const newWidget: Widget = {
             ...widget,
             id: `widget-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -118,7 +132,7 @@ export const useDashboard = () => {
             ...prev,
             widgets: [...prev.widgets, newWidget]
         }));
-    }, []);
+    }, [dashboardState.widgets]);
 
     const removeWidget = useCallback((id: string) => {
         setDashboardState((prev) => ({
@@ -149,7 +163,7 @@ export const useDashboard = () => {
 
     const importConfig = useCallback((config: string) => {
         try {
-            const parsed = JSON.parse(config);
+            const parsed = JSON.parse(config) as DashboardState;
             setDashboardState(parsed);
         } catch (error) {
             console.error('Failed to import configuration:', error);
@@ -166,6 +180,6 @@ export const useDashboard = () => {
         updateWidget,
         exportConfig,
         importConfig,
-        setTheme: (theme: 'light' | 'dark') => setDashboardState(prev => ({ ...prev, theme }))
+        setTheme: (theme: 'light' | 'dark') => setDashboardState((prev) => ({ ...prev, theme }))
     };
 };
